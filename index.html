@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Mobile Farming RPG v2.0</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.controls.min.js"></script>
+    
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+
+        /* ================= STYLE MAIN MENU ================= */
+        #menu-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            z-index: 10000; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; color: white; text-align: center;
+        }
+        .menu-title { font-size: 36px; font-weight: 800; text-shadow: 0 4px 10px rgba(0,0,0,0.3); margin-bottom: 5px; }
+        .menu-subtitle { font-size: 14px; opacity: 0.8; margin-bottom: 40px; letter-spacing: 1px; }
+        .btn-start {
+            padding: 16px 45px; font-size: 18px; font-weight: bold; color: #fff;
+            background: #4caf50; border: none; border-radius: 50px; cursor: pointer;
+            box-shadow: 0 8px 20px rgba(76, 175, 80, 0.4); transition: transform 0.2s;
+        }
+        .btn-start:active { transform: scale(0.95); }
+
+        /* ================= MOBILE UI CONTROLS ================= */
+        /* Custom Analog Stick yang Jelas & Tidak Transparan */
+        .a-joystick {
+            position: absolute !important; bottom: 40px; left: 40px;
+            width: 110px; height: 110px; background: #2c3e50 !important;
+            border: 4px solid #bdc3c7 !important; border-radius: 50% !important;
+            z-index: 999; touch-action: none; box-shadow: 0 8px 15px rgba(0,0,0,0.4);
+        }
+        .a-joystick .dot {
+            position: absolute !important; width: 45px; height: 45px;
+            background: #ffffff !important; border-radius: 50% !important;
+            top: 28px; left: 28px; box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        /* Tombol Aksi Kanan Bawah */
+        #action-btn {
+            position: absolute; bottom: 45px; right: 45px;
+            width: 90px; height: 90px; background: #e74c3c;
+            border: 4px solid #fff; border-radius: 50%; z-index: 999;
+            color: white; font-weight: bold; font-size: 12px; display: flex;
+            justify-content: center; align-items: center; text-align: center;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.4); touch-action: none;
+            display: none; /* Muncul jika dekat objek */
+        }
+        #action-btn.active-target { background: #2ecc71; animation: pulse 1s infinite; display: flex; }
+
+        /* ================= POPUP MODAL TOKO ================= */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); z-index: 9999; display: none;
+            justify-content: center; align-items: center; padding: 20px;
+        }
+        .modal-content {
+            background: white; width: 100%; max-width: 340px; padding: 20px;
+            border-radius: 20px; text-align: center; box-shadow: 0 15px 30px rgba(0,0,0,0.3);
+        }
+        .shop-item {
+            display: flex; justify-content: space-between; align-items: center;
+            background: #f8f9fa; padding: 10px 15px; margin: 10px 0; border-radius: 12px;
+            font-weight: bold; font-size: 14px;
+        }
+        .btn-buy { background: #2ecc71; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; }
+        .btn-close { background: #7f8c8d; color: white; border: none; padding: 10px; width: 100%; border-radius: 10px; font-weight: bold; margin-top: 10px; }
+
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.06); } 100% { transform: scale(1); } }
+    </style>
+</head>
+<body>
+
+    <div id="menu-screen">
+        <div class="menu-title">🌱 Megafarm 3D Mobile</div>
+        <div class="menu-subtitle">Edisi Android & iOS RPG Touch Engine</div>
+        <button class="btn-start" onclick="mulaiGame()">MULAI BERMAIN</button>
+    </div>
+
+    <div id="action-btn" onclick="triggerActionButton()">INTERAKSI</div>
+
+    <div id="shop-modal" class="modal">
+        <div class="modal-content">
+            <h3 style="color:#2c3e50; margin-bottom:5px;">🛒 Kedai Buah Segar</h3>
+            <p style="font-size:12px; color:#7f8c8d; margin-bottom:15px;">Beli buah matang instant menggunakan koinmu</p>
+            
+            <div class="shop-item">
+                <span>🍎 Apel Manis</span>
+                <button class="btn-buy" onclick="beliBuah('Apel', 15)">🪙15</button>
+            </div>
+            <div class="shop-item">
+                <span>🍊 Jeruk Segar</span>
+                <button class="btn-buy" onclick="beliBuah('Jeruk', 25)">🪙25</button>
+            </div>
+
+            <button class="btn-close" onclick="tutupToko()">Kembali ke Lahan</button>
+        </div>
+    </div>
+
+    <a-scene joystick-controls>
+        
+        <a-entity id="rig" position="0 0 5" movement-controls="controls: joystick, keyboard">
+            <a-camera id="camera" look-controls="touchEnabled: true">
+                <a-cursor visible="false"></a-cursor> </a-camera>
+        </a-entity>
+
+        <a-entity id="ui-koin" text="value: KOIN: 20; color: #ffffff; align: center; width: 6" position="0 3.5 -3" scale="1.4 1.4 1.4"></a-entity>
+        <a-entity id="ui-tas" text="value: BAG: 0 Wrt | 0 Buah; color: #ffeb3b; align: center; width: 5" position="0 2.8 -3"></a-entity>
+
+        <a-sky color="#a6d5fa"></a-sky> 
+        <a-plane position="0 -0.5 0" rotation="-90 0 0" width="100" height="100" color="#55a630"></a-plane> 
+
+        <a-entity id="zone-lahan" position="0 0 0">
+            <a-box id="plot-tanah" position="0 -0.4 0" width="2" height="0.2" depth="2" color="#8d6e63"></a-box>
+            <a-cylinder id="plant-model" position="0 0.2 0" radius="0.12" height="0.6" color="#4caf50" scale="0 0 0"></a-cylinder>
+            <a-entity text="value: LAHAN WORTEL; color: #ffffff; align: center; width: 3" position="0 0.8 0"></a-entity>
+        </a-entity>
+
+        <a-entity id="zone-toko" position="3 0 -2">
+            <a-box position="0 0.5 0" width="1.5" height="1.8" depth="1.5" color="#2980b9"></a-box>
+            <a-box position="0 0.6 0.8" width="0.8" height="0.8" depth="0.1" color="#f1c40f"></a-box> <a-entity text="value: TOKO BUAH SEGAR\n(Dekati & Klik Interaksi); color: #ffffff; align: center; width: 4" position="0 2 0"></a-entity>
+        </a-entity>
+
+        <a-entity id="zone-jual" position="-3 0 -2">
+            <a-box position="0 0.4 0" width="1.2" height="1.2" depth="1.2" color="#ffb300"></a-box>
+            <a-entity text="value: BURSA EKSPOR\n(Jual Hasil Tani); color: #000000; align: center; width: 4" position="0 1.5 0"></a-entity>
+        </a-entity>
+
+    </a-scene>
+
+    <script>
+        // Data Inventory Player
+        let koin = 20;
+        let wortelDiTas = 0;
+        let buahLainDiTas = 0;
+
+        // Data Kondisi Lahan Wortel: 'kosong', 'tumbuh', 'matang'
+        let statusLahan = 'kosong';
+        let progresTumbuh = 0;
+        
+        // Menyimpan objek apa yang sedang didekati oleh player
+        let objekTerdekat = null; 
+
+        // Fungsi Menghilangkan Menu Utama
+        function mulaiGame() {
+            document.getElementById('menu-screen').style.style = 'none';
+            document.getElementById('menu-screen').remove(); // Hapus elemen menu dari layar
+            
+            // Loop konstan untuk memantau jarak posisi koordinat Player dengan Objek di peta
+            setInterval(cekJarakObjekKamera, 200);
+        }
+
+        // Deteksi Jarak Otomatis antara Posisi Player dengan Target Zona
+        function cekJarakObjekKamera() {
+            let playerPos = document.getElementById('rig').getAttribute('position');
+            let actionBtn = document.getElementById('action-btn');
+
+            // Koordinat masing-masing objek zona
+            let jarakKeLahan = hitungJarakSederhana(playerPos, {x: 0, z: 0});
+            let jarakKeToko  = hitungJarakSederhana(playerPos, {x: 3, z: -2});
+            let jarakKeJual  = hitungJarakSederhana(playerPos, {x: -3, z: -2});
+
+            // Jika jaraknya di bawah 2.2 meter, maka anggap "Dekat" dan aktifkan tombol aksi
+            if (jarakKeLahan < 2.2) {
+                objekTerdekat = 'lahan';
+                actionBtn.innerText = statusLahan === 'kosong' ? "TANAM SEED" : (statusLahan === 'matang' ? "PANEN WORTEL" : "MENUNGGU...");
+                actionBtn.className = "active-target";
+            } else if (jarakKeToko < 2.2) {
+                objekTerdekat = 'toko';
+                actionBtn.innerText = "BUKA TOKO";
+                actionBtn.className = "active-target";
+            } else if (jarakKeJual < 2.2) {
+                objekTerdekat = 'jual';
+                actionBtn.innerText = "JUAL SEMUA";
+                actionBtn.className = "active-target";
+            } else {
+                objekTerdekat = null;
+                actionBtn.className = ""; // Sembunyikan tombol jika jauh
+            }
+        }
+
+        function hitungJarakSederhana(p1, p2) {
+            return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.z - p2.z, 2));
+        }
+
+        // Eksekusi ketika Jempol Kanan Mengetuk Tombol "INTERAKSI"
+        function triggerActionButton() {
+            if (!objekTerdekat) return;
+
+            if (objekTerdekat === 'lahan') {
+                eksekusiLahanPertanian();
+            } else if (objekTerdekat === 'toko') {
+                document.getElementById('shop-modal').style.display = 'flex';
+            } else if (objekTerdekat === 'jual') {
+                eksekusiPasarJual();
+            }
+        }
+
+        // 1. Logika di Lahan Pertanian
+        function eksekusiLahanPertanian() {
+            let plant = document.getElementById('plant-model');
+            let plot = document.getElementById('plot-tanah');
+
+            if (statusLahan === 'kosong') {
+                if (koin < 5) return alert("Koin tidak cukup! Butuh 5 Koin.");
+                koin -= 5;
+                statusLahan = 'tumbuh';
+                progresTumbuh = 0;
+                updateUI();
+
+                plot.setAttribute('color', '#5d4037'); // Tanah basah
+                plant.setAttribute('scale', '1 0.1 1');
+                plant.setAttribute('color', '#4caf50'); // Daun muda
+
+                let timer = setInterval(() => {
+                    progresTumbuh += 25;
+                    plant.setAttribute('scale', `1 ${0.1 + (progresTumbuh/100)*0.9} 1`);
+
+                    if (progresTumbuh >= 100) {
+                        clearInterval(timer);
+                        statusLahan = 'matang';
+                        plant.setAttribute('color', '#ff9800'); // Berubah jadi wortel oranye!
+                        cekJarakObjekKamera(); // Refresh tulisan di tombol
+                    }
+                }, 1000);
+            } 
+            else if (statusLahan === 'matang') {
+                wortelDiTas++;
+                statusLahan = 'kosong';
+                plant.setAttribute('scale', '0 0 0');
+                plot.setAttribute('color', '#8d6e63'); // Tanah kering kembali
+                updateUI();
+                cekJarakObjekKamera();
+            }
+        }
+
+        // 2. Logika Belanja di Toko Buah
+        function beliBuah(namaBuah, harga) {
+            if (koin < harga) return alert(`Koinmu tidak cukup untuk membeli ${namaBuah}!`);
+            koin -= harga;
+            buahLainDiTas++;
+            updateUI();
+            alert(`Berhasil membeli 1 ${namaBuah}!`);
+        }
+        function tutupToko() { document.getElementById('shop-modal').style.display = 'none'; }
+
+        // 3. Logika Menjual Seluruh Barang di Tas ke Bursa Emas
+        function eksekusiPasarJual() {
+            if (wortelDiTas === 0 && buahLainDiTas === 0) return alert("Tas kamu kosong!");
+            
+            let totalDuit = (wortelDiTas * 12) + (buahLainDiTas * 35); // Buah hasil beli bursa dihargai eksport tinggi 35 koin
+            koin += totalDuit;
+            
+            alert(`Ekspor Berhasil! Terjual total ${wortelDiTas + buahLainDiTas} komoditas. Pendapatan: +🪙${totalDuit} Koin!`);
+            wortelDiTas = 0;
+            buahLainDiTas = 0;
+            updateUI();
+            cekJarakObjekKamera();
+        }
+
+        // Update Teks HUD Atas
+        function updateUI() {
+            document.getElementById('ui-koin').setAttribute('text', `value: KOIN: ${koin}; color: #ffffff; align: center; width: 6`);
+            document.getElementById('ui-tas').setAttribute('text', `value: BAG: ${wortelDiTas} Wrt | ${buahLainDiTas} Buah; color: #ffeb3b; align: center; width: 5`);
+        }
+    </script>
+</body>
+</html>
